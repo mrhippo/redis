@@ -3021,6 +3021,7 @@ void closeSocketListeners(socketFds *sfd) {
 
 /* Create an event handler for accepting new connections in TCP or TLS domain sockets.
  * This works atomically for all socket fds */
+//创建接收客户端请求的handler
 int createSocketAcceptHandler(socketFds *sfd, aeFileProc *accept_handler) {
     int j;
 
@@ -3207,6 +3208,7 @@ void initServer(void) {
     adjustOpenFilesLimit();
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
+    /** 创建事件循环器 shengqiang **/
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -3345,6 +3347,9 @@ void initServer(void) {
     /* Register before and after sleep handlers (note this needs to be done
      * before loading persistence since it is used by processEventsWhileBlocked. */
     aeSetBeforeSleepProc(server.el,beforeSleep);
+    /**
+     * beforeSleep和afterSleep之间会有sleep，这个sleep指的是IO事件，即epoll_wait(?)
+     */
     aeSetAfterSleepProc(server.el,afterSleep);
 
     /* Open the AOF file if needed. */
@@ -4018,6 +4023,8 @@ int processCommand(client *c) {
 
     /* Now lookup the command and check ASAP about trivial error conditions
      * such as wrong arity, bad command name and so forth. */
+    //这里执行命令，argv[0]里存放的是Object_String，argv[1]里存放的是key，argv[2]里存放的是value，
+    // ptr指的是存放的data
     c->cmd = c->lastcmd = lookupCommand(c->argv[0]->ptr);
     if (!c->cmd) {
         sds args = sdsempty();
@@ -4288,6 +4295,7 @@ int processCommand(client *c) {
         queueMultiCommand(c);
         addReply(c,shared.queued);
     } else {
+        //这里执行调用具体数据类型的命令指令，比如执行set XX OO，调用call()执行的是setCommand方法
         call(c,CMD_CALL_FULL);
         c->woff = server.master_repl_offset;
         if (listLength(server.ready_keys))
@@ -6382,6 +6390,7 @@ int main(int argc, char **argv) {
     }
 
     readOOMScoreAdj();
+    /** 最重要的方法 shengqiang**/
     initServer();
     if (background || server.pidfile) createPidFile();
     if (server.set_proc_title) redisSetProcTitle(NULL);
@@ -6413,7 +6422,7 @@ int main(int argc, char **argv) {
         moduleInitModulesSystemLast();
         moduleLoadFromQueue();
         ACLLoadUsersAtStartup();
-        InitServerLast();
+        InitServerLast();//从网卡读取字节数组——>根据redis协议，转换成redisObject——>执行redis命令
         loadDataFromDisk();
         if (server.cluster_enabled) {
             if (verifyClusterConfigWithData() == C_ERR) {
@@ -6437,7 +6446,7 @@ int main(int argc, char **argv) {
         }
     } else {
         ACLLoadUsersAtStartup();
-        InitServerLast();
+        InitServerLast();//从网卡读取字节数组——>根据redis协议，转换成redisObject——>执行redis命令
         sentinelIsRunning();
         if (server.supervised_mode == SUPERVISED_SYSTEMD) {
             redisCommunicateSystemd("STATUS=Ready to accept connections\n");

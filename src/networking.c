@@ -2023,6 +2023,7 @@ int processMultibulkBuffer(client *c) {
                 c->bulklen >= PROTO_MBULK_BIG_ARG &&
                 sdslen(c->querybuf) == (size_t)(c->bulklen+2))
             {
+                //创建较大内存空间的字符串类型的robj
                 c->argv[c->argc++] = createObject(OBJ_STRING,c->querybuf);
                 c->argv_len_sum += c->bulklen;
                 sdsIncrLen(c->querybuf,-2); /* remove CRLF */
@@ -2031,6 +2032,7 @@ int processMultibulkBuffer(client *c) {
                 c->querybuf = sdsnewlen(SDS_NOINIT,c->bulklen+2);
                 sdsclear(c->querybuf);
             } else {
+                //创建emb或raw方式的robj
                 c->argv[c->argc++] =
                     createStringObject(c->querybuf+c->qb_pos,c->bulklen);
                 c->argv_len_sum += c->bulklen;
@@ -2182,6 +2184,7 @@ void processInputBuffer(client *c) {
                 break;
             }
         } else if (c->reqtype == PROTO_REQ_MULTIBULK) {
+            //利用redis新协议(即*...&...，并且返回RESP)，创建redisObject
             if (processMultibulkBuffer(c) != C_OK) break;
         } else {
             serverPanic("Unknown request type");
@@ -2198,7 +2201,7 @@ void processInputBuffer(client *c) {
                 c->flags |= CLIENT_PENDING_COMMAND;
                 break;
             }
-
+            //最终执行redis命令的入口
             /* We are finally ready to execute the command. */
             if (processCommandAndResetClient(c) == C_ERR) {
                 /* If the client is no longer valid, we avoid exiting this
@@ -2223,6 +2226,7 @@ void readQueryFromClient(connection *conn) {
 
     /* Check if we want to read from the client later when exiting from
      * the event loop. This is the case if threaded I/O is enabled. */
+    //分配这个方法只在主线程执行，IO线程就不符合里面的执行条件
     if (postponeClientRead(c)) return;
 
     /* Update total number of reads on server */
@@ -2248,6 +2252,7 @@ void readQueryFromClient(connection *conn) {
     qblen = sdslen(c->querybuf);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+    //c->querybuf+qblen：从当前buf[]+qblen的最新位置开始，获取长度为readlen的数据
     nread = connRead(c->conn, c->querybuf+qblen, readlen);
     if (nread == -1) {
         if (connGetState(conn) == CONN_STATE_CONNECTED) {
@@ -2283,7 +2288,7 @@ void readQueryFromClient(connection *conn) {
         freeClientAsync(c);
         return;
     }
-
+    //把client结构体里的sds转换成redisObject,最终执行redis命令
     /* There is more data in the client input buffer, continue parsing it
      * in case to check if there is a full command to execute. */
      processInputBuffer(c);
@@ -3537,6 +3542,7 @@ void *IOThreadMain(void *myid) {
     while(1) {
         /* Wait for start */
         for (int j = 0; j < 1000000; j++) {
+            //一旦主线程提供了新的读/写IO，就会跳出循环
             if (getIOPendingCount(id) != 0) break;
         }
 
@@ -3594,6 +3600,7 @@ void initThreadedIO(void) {
         pthread_mutex_init(&io_threads_mutex[i],NULL);
         setIOPendingCount(i, 0);
         pthread_mutex_lock(&io_threads_mutex[i]); /* Thread will be stopped. */
+        //创建IO线程，默认是4个线程
         if (pthread_create(&tid,NULL,IOThreadMain,(void*)(long)i) != 0) {
             serverLog(LL_WARNING,"Fatal: Can't initialize IO thread.");
             exit(1);
@@ -3660,6 +3667,7 @@ int stopThreadedIOIfNeeded(void) {
 }
 
 int handleClientsWithPendingWritesUsingThreads(void) {
+    /** 有客户端连接的话，会往clients_pending_write里写数据 **/
     int processed = listLength(server.clients_pending_write);
     if (processed == 0) return 0; /* Return ASAP if there are no clients. */
 
@@ -3678,6 +3686,7 @@ int handleClientsWithPendingWritesUsingThreads(void) {
     listRewind(server.clients_pending_write,&li);
     int item_id = 0;
     while((ln = listNext(&li))) {
+        //从链表里获取客户端
         client *c = listNodeValue(ln);
         c->flags &= ~CLIENT_PENDING_WRITE;
 

@@ -262,7 +262,7 @@ void setCommand(client *c) {
     if (parseExtendedStringArgumentsOrReply(c,&flags,&unit,&expire,COMMAND_SET) != C_OK) {
         return;
     }
-
+    //把Object_String类型转换为String，argv[2]指的是value，argv[1]指的是key
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setGenericCommand(c,flags,c->argv[1],c->argv[2],expire,unit,NULL,NULL);
 }

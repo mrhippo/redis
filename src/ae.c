@@ -162,7 +162,7 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         return AE_ERR;
     }
     aeFileEvent *fe = &eventLoop->events[fd];
-
+    // 这个方法在linux系统下会执行ae_epoll.c的方法
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
     fe->mask |= mask;
@@ -392,6 +392,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 
         /* Call the multiplexing API, will return only on timeout or when
          * some event fires. */
+        //从epoll里获取的IO事件数量，执行epoll_wait就是sleep
         numevents = aeApiPoll(eventLoop, tvp);
 
         /* After sleep callback. */

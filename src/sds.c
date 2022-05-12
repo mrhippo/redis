@@ -112,6 +112,7 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     size_t usable;
 
     assert(initlen + hdrlen + 1 > initlen); /* Catch size_t overflow */
+    //sh指的是sds的header，如果是第一次创建header，则开辟的sh空间大小=3+0+1=4个字节(1指的是\0)
     sh = trymalloc?
         s_trymalloc_usable(hdrlen+initlen+1, &usable) :
         s_malloc_usable(hdrlen+initlen+1, &usable);
@@ -120,7 +121,10 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
         init = NULL;
     else if (!init)
         memset(sh, 0, hdrlen+initlen+1);
+    //(char*)sh指的是header的起始位置，hdrlen指的是header的空间大小
+    //所以s指向的就是存放数据的buf[]字节数组的起始位置
     s = (char*)sh+hdrlen;
+    //s-1指的是flag的位置
     fp = ((unsigned char*)s)-1;
     usable = usable-hdrlen-1;
     if (usable > sdsTypeMaxSize(type))

@@ -84,6 +84,15 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     if (mask & AE_READABLE) ee.events |= EPOLLIN;
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
     ee.data.fd = fd;
+    /**
+     * #include <sys / epoll.h>
+       int epoll_ctl（int epfd，int op，int fd，struct epoll_event * event）;
+     * epoll_ctl的参数说明：
+     * epoll_create产生的句柄，
+     * 操作类型，
+     * 文件描述符(这里指的是监听6379的fd)，
+     * epoll_event的指针(告诉内核，要监听什么事件)
+     */
     if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
     return 0;
 }
@@ -109,7 +118,7 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int delmask) {
 static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     aeApiState *state = eventLoop->apidata;
     int retval, numevents = 0;
-
+    /** 这里监听的是服务端6379的事件，而不是客户端的读写事件，因为此时客户端还没有accept事件 **/
     retval = epoll_wait(state->epfd,state->events,eventLoop->setsize,
             tvp ? (tvp->tv_sec*1000 + (tvp->tv_usec + 999)/1000) : -1);
     if (retval > 0) {
@@ -124,7 +133,9 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
             if (e->events & EPOLLOUT) mask |= AE_WRITABLE;
             if (e->events & EPOLLERR) mask |= AE_WRITABLE|AE_READABLE;
             if (e->events & EPOLLHUP) mask |= AE_WRITABLE|AE_READABLE;
+            //这个data.fd是6379的fd
             eventLoop->fired[j].fd = e->data.fd;
+            //这个mask是AE_READABLE
             eventLoop->fired[j].mask = mask;
         }
     }
